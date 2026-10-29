@@ -1,0 +1,1215 @@
+{
+  "name": "Unified inbox router (Gmail + IMAP + Outlook, human-approved replies)",
+  "nodes": [
+    {
+      "id": "t-gmail",
+      "name": "Gmail: sales inbox",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "readStatus": "unread",
+          "includeSpamTrash": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "t-yahoo",
+      "name": "IMAP: Yahoo inbox",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {
+        "mailbox": "INBOX",
+        "postProcessAction": "read",
+        "format": "simple",
+        "downloadAttachments": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "t-imap2",
+      "name": "IMAP: custom-domain inbox",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "mailbox": "INBOX",
+        "postProcessAction": "read",
+        "format": "simple",
+        "downloadAttachments": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "t-outlook",
+      "name": "Outlook: support inbox",
+      "type": "n8n-nodes-base.microsoftOutlookTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        600
+      ],
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "event": "messageReceived",
+        "output": "raw",
+        "filters": {
+          "readStatus": "unread"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "s-gmail",
+      "name": "Tag: Gmail",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s-gmail-1",
+              "name": "_mailbox",
+              "value": "sales@gmail",
+              "type": "string"
+            },
+            {
+              "id": "s-gmail-2",
+              "name": "_provider",
+              "value": "gmail",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "s-yahoo",
+      "name": "Tag: Yahoo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        200
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s-yahoo-1",
+              "name": "_mailbox",
+              "value": "info@yahoo",
+              "type": "string"
+            },
+            {
+              "id": "s-yahoo-2",
+              "name": "_provider",
+              "value": "imap",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "s-imap2",
+      "name": "Tag: custom domain",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        400
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s-imap2-1",
+              "name": "_mailbox",
+              "value": "hello@yourdomain",
+              "type": "string"
+            },
+            {
+              "id": "s-imap2-2",
+              "name": "_provider",
+              "value": "imap",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "s-outlook",
+      "name": "Tag: Outlook",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        600
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s-outlook-1",
+              "name": "_mailbox",
+              "value": "support@outlook",
+              "type": "string"
+            },
+            {
+              "id": "s-outlook-2",
+              "name": "_provider",
+              "value": "outlook",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c-norm",
+      "name": "Normalize message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// n8n Code node: \"Normalize message\" (mode: Run Once for All Items)\n// Accepts items from Gmail Trigger (simple on/off), IMAP Email Trigger (simple or resolved format)\n// and Microsoft Outlook Trigger (simplified or raw). Each trigger is followed by a \"Tag mailbox\" Set node\n// that adds _mailbox (a label like \"sales@gmail\") and _provider (gmail | imap | outlook).\n// Output: one flat item per message with the same field names, whatever mailbox it came from.\n\nfunction parseAddress(v) {\n  if (!v) return { email: '', name: '' };\n  if (Array.isArray(v)) return parseAddress(v[0]);\n  if (typeof v === 'object') {\n    if (Array.isArray(v.value) && v.value.length) return { email: (v.value[0].address || '').toLowerCase(), name: v.value[0].name || '' };\n    if (v.emailAddress) return { email: (v.emailAddress.address || '').toLowerCase(), name: v.emailAddress.name || '' };\n    if (v.address) return { email: String(v.address).toLowerCase(), name: v.name || '' };\n    if (v.text) return parseAddress(v.text);\n    return { email: '', name: '' };\n  }\n  const s = String(v).trim();\n  const m = s.match(/^\\s*\"?([^\"<]*?)\"?\\s*<([^>]+)>\\s*$/);\n  if (m) return { email: m[2].trim().toLowerCase(), name: m[1].trim() };\n  const e = s.match(/[^\\s<>\"']+@[^\\s<>\"']+/);\n  return { email: e ? e[0].toLowerCase() : '', name: '' };\n}\n\nfunction stripHtml(html) {\n  return String(html || '')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ').replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n    .replace(/<br\\s*\\/?>/gi, '\\n').replace(/<\\/(p|div|li|tr|h\\d)>/gi, '\\n')\n    .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;|&apos;/g, \"'\").replace(/&quot;/g, '\"');\n}\n\n// Drop quoted history so the classifier only sees what the sender actually wrote now.\nfunction stripQuoted(text) {\n  const out = [];\n  for (const line of String(text).split(/\\r?\\n/)) {\n    if (/^\\s*>/.test(line)) continue;\n    if (/^\\s*On .{3,120} wrote:\\s*$/i.test(line)) break;\n    if (/^\\s*-{2,}\\s*Original Message\\s*-{2,}/i.test(line)) break;\n    if (/^\\s*From: .+/i.test(line) && out.length > 2) break;\n    out.push(line);\n  }\n  return out.join('\\n').replace(/[ \\t]+/g, ' ').replace(/\\n{3,}/g, '\\n\\n').trim();\n}\n\nfunction hashKey(s) { // short stable id (FNV-1a) so the same message never gets two log rows\n  let h = 0x811c9dc5;\n  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }\n  return h.toString(36);\n}\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  const provider = String(j._provider || '').toLowerCase() || (j.threadId ? 'gmail' : j.conversationId ? 'outlook' : 'imap');\n  const mailbox = j._mailbox || provider;\n  const from = parseAddress(j.from ?? j.From ?? j.sender);\n  const subject = String(j.subject ?? j.Subject ?? '').trim();\n  let body = j.text || j.textPlain || '';\n  if (!body && (j.html || j.textHtml)) body = stripHtml(j.html || j.textHtml);\n  if (!body && j.body && typeof j.body === 'object') body = j.body.contentType === 'html' ? stripHtml(j.body.content) : (j.body.content || '');\n  if (!body) body = j.snippet || j.bodyPreview || '';\n  body = stripQuoted(body).slice(0, 4000);\n  const receivedRaw = j.date || j.Date || j.receivedDateTime || j.internalDate || '';\n  let received = new Date(/^\\d{12,}$/.test(String(receivedRaw)) ? Number(receivedRaw) : receivedRaw);\n  if (isNaN(received)) received = new Date();\n  const sourceId = String(j.id || j.messageId || (j.metadata && j.metadata['message-id']) || (j.attributes && j.attributes.uid) || '');\n  const threadId = String(j.threadId || j.conversationId || (j.metadata && (j.metadata['in-reply-to'] || j.metadata['references'])) || '');\n  const replyTo = parseAddress(j.replyTo || j['reply-to'] || (j.metadata && j.metadata['reply-to']));\n  out.push({ json: {\n    msg_key: provider + '-' + hashKey(mailbox + '|' + (sourceId || from.email + subject + received.toISOString())),\n    received_at: received.toISOString(),\n    mailbox, provider,\n    source_id: sourceId,\n    thread_id: threadId,\n    from_email: from.email,\n    from_name: from.name,\n    reply_to: replyTo.email || from.email,\n    subject: subject || '(no subject)',\n    body,\n    snippet: body.replace(/\\s+/g, ' ').slice(0, 200),\n  } });\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "c-class",
+      "name": "Classify & assign owner",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// n8n Code node: \"Classify & assign owner\" (mode: Run Once for All Items)\n// Keyword classifier: lead / support / billing / spam, plus \"needs_triage\" when nothing matches.\n// It is deliberately simple and explainable: every decision lists the rules that fired (matched_rules).\n// To use an LLM instead, put n8n's \"Text Classifier\" (AI) node here; keep the output field names.\n\n// ===== EDIT ME: who owns what =====\nconst OWNERS = {\n  lead:         [{ name: 'Sales (Ana)', email: 'ana@yourcompany.example' }],\n  support:      [{ name: 'Support (Ben)', email: 'ben@yourcompany.example' }, { name: 'Support (Cy)', email: 'cy@yourcompany.example' }],\n  billing:      [{ name: 'Billing (Di)', email: 'di@yourcompany.example' }],\n  needs_triage: [{ name: 'Office manager', email: 'office@yourcompany.example' }],\n  spam:         [{ name: '(nobody)', email: '' }],\n};\n// Sender domains that always go to a named owner (key accounts), whatever the category.\nconst DOMAIN_OWNERS = { 'bigclient.example': { name: 'Account manager (Eve)', email: 'eve@yourcompany.example' } };\n// Senders that are never spam (your own domain, key suppliers).\nconst ALLOWLIST_DOMAINS = ['yourcompany.example'];\n// ===================================\n\nconst RULES = {\n  spam: [\n    [/\\b(guest post|backlinks?|seo (services|package|audit) for your|rank (you|your site) on (the )?first page)\\b/i, 3],\n    [/\\b(crypto|bitcoin|forex|investment opportunity|lottery|you have won|inheritance)\\b/i, 3],\n    [/\\b(web ?design|app development|lead generation) (services|agency) (for|to) (you|your)/i, 2],\n    [/\\bunsubscribe\\b/i, 1], [/\\b(limited time|act now|100% free|risk[- ]free)\\b/i, 1],\n  ],\n  billing: [\n    [/\\b(invoice|receipt|billing|billed|charged?|charges|refund|chargeback|payment (failed|declined|issue)|credit card|subscription|renewal|vat|tax id)\\b/i, 2],\n    [/\\b(cancel (my )?(plan|subscription|account)|double charged|overcharged|wrong amount)\\b/i, 3],\n  ],\n  support: [\n    [/\\b(not working|doesn'?t work|broken|error|bug|crash(es|ed)?|can'?t (log ?in|login|access|find)|password reset|issue with|problem with|stopped working)\\b/i, 2],\n    [/\\b(where is my order|tracking|delivery|shipped|return|exchange|damaged|missing item)\\b/i, 2],\n    [/\\b(help|support|how do i|urgent)\\b/i, 1],\n  ],\n  lead: [\n    [/\\b(quote|pricing|price list|how much|rates?|estimate|proposal|budget)\\b/i, 2],\n    [/\\b(interested in|looking for (a|an|someone)|would like to (hire|book|order|work)|can you (build|help us|do)|book a (call|demo|meeting)|demo|consultation|partnership)\\b/i, 2],\n    [/\\b(new project|our (company|team|business)|for (our|my) (store|clinic|agency|firm|restaurant))\\b/i, 1],\n  ],\n};\nconst URGENT = /\\b(urgent|asap|immediately|today|down|outage|chargeback|legal|lawyer)\\b/i;\n\nfunction pick(list, key) { // stable round-robin by message key: same message -> same owner, no state needed\n  let h = 0; for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;\n  return list[h % list.length];\n}\n\nreturn $input.all().map(({ json: m }) => {\n  const domain = (m.from_email.split('@')[1] || '').toLowerCase();\n  const subj = m.subject || ''; const body = m.body || '';\n  const scores = {}; const fired = [];\n  for (const [cat, rules] of Object.entries(RULES)) {\n    scores[cat] = 0;\n    for (const [re, w] of rules) {\n      const inSubj = re.test(subj), inBody = re.test(body);\n      if (inSubj || inBody) { scores[cat] += w * (inSubj ? 2 : 1); fired.push(cat + ':' + (re.source.match(/\\(([^)|]{3,30})/) || [, re.source.slice(0, 20)])[1]); }\n    }\n  }\n  if (ALLOWLIST_DOMAINS.includes(domain)) scores.spam = 0;\n  // spam only wins when it clearly outscores real intent\n  let category = 'needs_triage'; let best = 0;\n  for (const cat of ['billing', 'support', 'lead']) if (scores[cat] > best) { best = scores[cat]; category = cat; }\n  if (scores.spam >= 3 && scores.spam > best) { category = 'spam'; best = scores.spam; }\n  const total = Object.values(scores).reduce((a, b) => a + b, 0) || 1;\n  const confidence = category === 'needs_triage' ? 0 : Math.round((best / total) * 100) / 100;\n  const owner = DOMAIN_OWNERS[domain] && category !== 'spam' ? DOMAIN_OWNERS[domain] : pick(OWNERS[category], m.msg_key);\n  const priority = category === 'spam' ? 'none' : (URGENT.test(subj + ' ' + body) || (category === 'lead' && /\\bbudget\\b/i.test(body))) ? 'high' : 'normal';\n  return { json: { ...m, category, confidence, matched_rules: fired.join(', '), owner: owner.name, owner_email: owner.email, priority } };\n});\n"
+      }
+    },
+    {
+      "id": "c-draft",
+      "name": "Draft reply (needs approval)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// n8n Code node: \"Draft reply (needs approval)\" (mode: Run Once for All Items)\n// Writes a short template reply per category. NOTHING IS SENT HERE.\n// status = pending_approval: a human must change it to \"approved\" in the log sheet (optionally editing\n// final_reply first). Only then does the \"Send approved replies\" branch send it.\n// Spam gets no draft and status = ignored_spam. Swap this node for an AI Agent / OpenAI node if you\n// prefer AI drafts; keep the same output fields so the approval step still applies.\n\n// ===== EDIT ME =====\nconst SIGNATURE = '\\n\\nBest,\\nThe YourCompany team';\nconst LINKS = { booking: 'https://cal.com/yourcompany/intro', status: 'https://status.yourcompany.example' };\n// ===================\n\nfunction firstName(m) {\n  const n = (m.from_name || '').trim().split(/\\s+/)[0];\n  return n && /^[\\p{L}'-]{2,}$/u.test(n) ? n : 'there';\n}\nconst T = {\n  lead: m => `Hi ${firstName(m)},\\n\\nThanks for reaching out about \"${m.subject}\". ${m.owner.replace(/^.*\\((.*)\\)$/, '$1')} will look after you personally.\\n\\nTo give you an accurate answer, could you share (1) what you want to achieve, (2) your timeline and (3) a rough budget range? If it is easier to talk, pick a 15-minute slot here: ${LINKS.booking}`,\n  support: m => `Hi ${firstName(m)},\\n\\nThanks for letting us know. We have logged your message (\"${m.subject}\") and ${m.owner.replace(/^.*\\((.*)\\)$/, '$1')} is looking into it.\\n\\nIf you can, reply with a screenshot, the time it happened and any error text, so we can reproduce it faster. Live status: ${LINKS.status}`,\n  billing: m => `Hi ${firstName(m)},\\n\\nThanks for your message about \"${m.subject}\". Our billing team has it and will check your account.\\n\\nPlease reply with the invoice number or the last 4 digits of the card used, never the full card number.`,\n  needs_triage: m => `Hi ${firstName(m)},\\n\\nThanks for your email (\"${m.subject}\"). We have received it and the right person will get back to you shortly.`,\n};\n\nconst nowIso = new Date().toISOString();\nreturn $input.all().map(({ json: m }) => {\n  const isSpam = m.category === 'spam';\n  const draft = isSpam ? '' : T[m.category](m) + SIGNATURE;\n  return { json: {\n    msg_key: m.msg_key, received_at: m.received_at, mailbox: m.mailbox, provider: m.provider,\n    source_id: m.source_id, thread_id: m.thread_id, from_email: m.from_email, from_name: m.from_name, reply_to: m.reply_to,\n    subject: m.subject, snippet: m.snippet, category: m.category, confidence: m.confidence, matched_rules: m.matched_rules,\n    owner: m.owner, owner_email: m.owner_email, priority: m.priority,\n    draft_reply: draft, final_reply: '',\n    status: isSpam ? 'ignored_spam' : 'pending_approval',\n    approved_by: '', sent_at: '', logged_at: nowIso,\n  } };\n});\n"
+      }
+    },
+    {
+      "id": "g-log",
+      "name": "Log to sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1220,
+        300
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "inbox_log"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "msg_key",
+              "displayName": "msg_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "mailbox",
+              "displayName": "mailbox",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "provider",
+              "displayName": "provider",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_id",
+              "displayName": "source_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "from_email",
+              "displayName": "from_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "from_name",
+              "displayName": "from_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reply_to",
+              "displayName": "reply_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "snippet",
+              "displayName": "snippet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "matched_rules",
+              "displayName": "matched_rules",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "owner",
+              "displayName": "owner",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "owner_email",
+              "displayName": "owner_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "draft_reply",
+              "displayName": "draft_reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_reply",
+              "displayName": "final_reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "approved_by",
+              "displayName": "approved_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "logged_at",
+              "displayName": "logged_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "i-needs",
+      "name": "Needs approval?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1460,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $('Draft reply (needs approval)').item.json.status }}",
+              "rightValue": "pending_approval",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "sl-ask",
+      "name": "Ask owner to approve (Slack)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1700,
+        220
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#inbox-approvals"
+        },
+        "text": "={{ (() => { const d = $('Draft reply (needs approval)').item.json; return `${d.priority === 'high' ? ':rotating_light: HIGH ' : ''}*${d.category.toUpperCase()}* for ${d.owner}\\nFrom: ${d.from_email} (${d.mailbox})\\nSubject: ${d.subject}\\n> ${d.snippet}\\n\\n*Draft reply (not sent):*\\n${d.draft_reply}\\n\\nTo send: open the inbox_log sheet, row msg_key=${d.msg_key}, edit final_reply if needed, set status = approved.`; })() }}",
+        "otherOptions": {}
+      }
+    },
+    {
+      "id": "t-send",
+      "name": "Every 5 min: send approved",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        900
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "g-read-ok",
+      "name": "Read approved rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        900
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "inbox_log"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "status",
+              "lookupValue": "approved"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": false
+        }
+      },
+      "alwaysOutputData": false
+    },
+    {
+      "id": "c-ok",
+      "name": "Pick approved, unsent replies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        900
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// n8n Code node: \"Pick approved, unsent replies\" (mode: Run Once for All Items)\n// Input: rows read from the log sheet. Only rows a human set to status \"approved\" pass, and only once\n// (rows with sent_at are skipped). final_reply wins over draft_reply when the approver edited it.\nconst out = [];\nfor (const { json: r } of $input.all()) {\n  if (String(r.status || '').trim().toLowerCase() !== 'approved') continue;\n  if (String(r.sent_at || '').trim()) continue;\n  const body = String(r.final_reply || '').trim() || String(r.draft_reply || '').trim();\n  const to = String(r.reply_to || r.from_email || '').trim();\n  if (!body || !/@/.test(to)) continue;\n  const subject = /^re:/i.test(r.subject || '') ? r.subject : 'Re: ' + (r.subject || '');\n  out.push({ json: { msg_key: r.msg_key, provider: String(r.provider || 'imap').toLowerCase(), mailbox: r.mailbox,\n    source_id: r.source_id, to, subject, body } });\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "sw-prov",
+      "name": "Reply from the same mailbox",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        720,
+        900
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.provider }}",
+                    "rightValue": "gmail",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "gmail"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.provider }}",
+                    "rightValue": "outlook",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "outlook"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.provider }}",
+                    "rightValue": "imap",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "imap"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "m-gmail",
+      "name": "Gmail: reply in thread",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        980,
+        780
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "reply",
+        "messageId": "={{ $json.source_id }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "m-outlook",
+      "name": "Outlook: reply in thread",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        980,
+        900
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "reply",
+        "messageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.source_id }}"
+        },
+        "message": "={{ $json.body }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "m-smtp",
+      "name": "SMTP: send (Yahoo / custom domain)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        980,
+        1020
+      ],
+      "parameters": {
+        "fromEmail": "={{ $json.mailbox === 'info@yahoo' ? 'info@yahoo.example' : 'hello@yourdomain.example' }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "g-mark",
+      "name": "Mark row sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1240,
+        900
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "inbox_log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "msg_key": "={{ $('Pick approved, unsent replies').item.json.msg_key }}",
+            "status": "sent",
+            "sent_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "msg_key"
+          ],
+          "schema": [
+            {
+              "id": "msg_key",
+              "displayName": "msg_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "t-digest",
+      "name": "Daily 08:00 digest",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1250
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "g-read-all",
+      "name": "Read log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        1250
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "inbox_log"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c-digest",
+      "name": "Build daily digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        1250
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// n8n Code node: \"Build daily digest\" (mode: Run Once for All Items)\n// Input: all rows of the log sheet. Output: one item with a Slack-ready text covering the last 24 hours,\n// plus every reply still waiting for approval (whatever its age), oldest first.\nconst now = $input.first().json.__now ? new Date($input.first().json.__now) : new Date(); // __now: tests only\nconst since = now.getTime() - 24 * 3600 * 1000;\nconst rows = $input.all().map(i => i.json).filter(r => r.msg_key);\nconst recent = rows.filter(r => new Date(r.received_at).getTime() >= since);\nconst byCat = {}; const byOwner = {};\nfor (const r of recent) {\n  byCat[r.category] = (byCat[r.category] || 0) + 1;\n  if (r.category !== 'spam') byOwner[r.owner] = (byOwner[r.owner] || 0) + 1;\n}\nconst pending = rows.filter(r => String(r.status).toLowerCase() === 'pending_approval')\n  .sort((a, b) => new Date(a.received_at) - new Date(b.received_at));\nconst age = r => { const m = Math.round((now - new Date(r.received_at)) / 60000); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };\nconst sentToday = rows.filter(r => r.sent_at && new Date(r.sent_at).getTime() >= since).length;\nconst lines = [\n  `*Inbox digest, last 24h* (${now.toISOString().slice(0, 16).replace('T', ' ')} UTC)`,\n  `Received: ${recent.length}  |  lead ${byCat.lead || 0} · support ${byCat.support || 0} · billing ${byCat.billing || 0} · triage ${byCat.needs_triage || 0} · spam ${byCat.spam || 0}`,\n  `Replies sent after approval: ${sentToday}`,\n  `By owner: ${Object.entries(byOwner).map(([o, n]) => `${o} ${n}`).join(', ') || 'none'}`,\n  pending.length ? `*Waiting for approval: ${pending.length}* (oldest first)` : 'Nothing waiting for approval.',\n  ...pending.slice(0, 10).map(r => `• [${r.category}${r.priority === 'high' ? ', HIGH' : ''}] ${r.subject} — ${r.from_email} — ${r.owner} — waiting ${age(r)}`),\n];\nif (pending.length > 10) lines.push(`…and ${pending.length - 10} more in the sheet.`);\nreturn [{ json: { text: lines.join('\\n'), received: recent.length, by_category: byCat, by_owner: byOwner, pending: pending.length, sent: sentToday } }];\n"
+      }
+    },
+    {
+      "id": "sl-digest",
+      "name": "Post digest (Slack)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        720,
+        1250
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#inbox-digest"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      }
+    },
+    {
+      "id": "n-1",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -420
+      ],
+      "parameters": {
+        "width": 560,
+        "height": 380,
+        "content": "## Unified inbox router (demo by Paopao Studio)\nGmail + Yahoo (IMAP) + any IMAP mailbox + Outlook → one log, one owner per message, one approval queue.\n\n1. **Intake**: one trigger per mailbox, tagged with its name.\n2. **Normalize → Classify → Assign owner**: lead / support / billing / spam / needs_triage, keyword rules (every decision lists the rules that fired).\n3. **Draft reply**: written to the sheet as `pending_approval`. **Nothing is sent automatically.**\n4. **Approve**: a human sets `status = approved` in the sheet (edit `final_reply` first if needed). The 5-minute branch sends only those rows, from the mailbox the message came to, and marks them `sent`.\n5. **Digest**: 08:00 summary to Slack.\n\nSetup and limits: see README."
+      }
+    },
+    {
+      "id": "n-2",
+      "name": "Credentials",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        560,
+        -420
+      ],
+      "parameters": {
+        "width": 520,
+        "height": 380,
+        "content": "### Credentials you need\n- **Gmail**: Google OAuth2 (Gmail + Sheets scopes). Google Cloud app in *Testing* → token dies after 7 days; publish to *In production*. Unused 6 months or password change → reconnect.\n- **Yahoo / custom domain**: IMAP + SMTP with an *app password* (Yahoo: Account security → Generate app password).\n- **Outlook.com / Microsoft 365**: Microsoft Outlook OAuth2. Not IMAP: Microsoft turned off password (basic) auth for Outlook IMAP/SMTP, and n8n's IMAP node only does passwords.\n- **Google Sheets**: tab `inbox_log` with the header row from README.\n- **Slack**: bot token, channels `#inbox-approvals`, `#inbox-digest`.",
+        "color": "5"
+      }
+    }
+  ],
+  "connections": {
+    "Gmail: sales inbox": {
+      "main": [
+        [
+          {
+            "node": "Tag: Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IMAP: Yahoo inbox": {
+      "main": [
+        [
+          {
+            "node": "Tag: Yahoo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IMAP: custom-domain inbox": {
+      "main": [
+        [
+          {
+            "node": "Tag: custom domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outlook: support inbox": {
+      "main": [
+        [
+          {
+            "node": "Tag: Outlook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag: Gmail": {
+      "main": [
+        [
+          {
+            "node": "Normalize message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag: Yahoo": {
+      "main": [
+        [
+          {
+            "node": "Normalize message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag: custom domain": {
+      "main": [
+        [
+          {
+            "node": "Normalize message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag: Outlook": {
+      "main": [
+        [
+          {
+            "node": "Normalize message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize message": {
+      "main": [
+        [
+          {
+            "node": "Classify & assign owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify & assign owner": {
+      "main": [
+        [
+          {
+            "node": "Draft reply (needs approval)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft reply (needs approval)": {
+      "main": [
+        [
+          {
+            "node": "Log to sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to sheet": {
+      "main": [
+        [
+          {
+            "node": "Needs approval?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs approval?": {
+      "main": [
+        [
+          {
+            "node": "Ask owner to approve (Slack)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Every 5 min: send approved": {
+      "main": [
+        [
+          {
+            "node": "Read approved rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read approved rows": {
+      "main": [
+        [
+          {
+            "node": "Pick approved, unsent replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick approved, unsent replies": {
+      "main": [
+        [
+          {
+            "node": "Reply from the same mailbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply from the same mailbox": {
+      "main": [
+        [
+          {
+            "node": "Gmail: reply in thread",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Outlook: reply in thread",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SMTP: send (Yahoo / custom domain)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: reply in thread": {
+      "main": [
+        [
+          {
+            "node": "Mark row sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outlook: reply in thread": {
+      "main": [
+        [
+          {
+            "node": "Mark row sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMTP: send (Yahoo / custom domain)": {
+      "main": [
+        [
+          {
+            "node": "Mark row sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 08:00 digest": {
+      "main": [
+        [
+          {
+            "node": "Read log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read log": {
+      "main": [
+        [
+          {
+            "node": "Build daily digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build daily digest": {
+      "main": [
+        [
+          {
+            "node": "Post digest (Slack)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

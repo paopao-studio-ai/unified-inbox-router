@@ -1,0 +1,27 @@
+{
+  "_note": "SAMPLE DATA. Invented messages in the shapes n8n's Gmail Trigger, IMAP Email Trigger and Outlook Trigger return. Not real customers.",
+  "items": [
+    {"_mailbox": "sales@gmail", "_provider": "gmail", "id": "18c1a0f0sample1", "threadId": "18c1a0f0sample1",
+     "from": {"value": [{"address": "Maria.Lopez@sample-dental.example", "name": "Maria Lopez"}], "text": "Maria Lopez <maria.lopez@sample-dental.example>"},
+     "subject": "Quote for automating our appointment reminders",
+     "text": "Hi, we're a 3-chair dental clinic and are interested in automating reminders and follow-ups. What would a project like this cost? Our budget is around $1,500.\n\nOn Tue, Oct 27, 2026 at 9:00 AM someone wrote:\n> old quoted text about pricing and refunds",
+     "date": "2026-10-29T14:05:00.000Z"},
+    {"_mailbox": "info@yahoo", "_provider": "imap", "from": "\"Tom Reed\" <tom.reed@sample-mail.example>",
+     "subject": "Re: Order #1042 - tracking not working", "textPlain": "The tracking link you sent is not working and the order hasn't shipped. Can you help?",
+     "textHtml": "", "date": "Thu, 29 Oct 2026 15:12:00 +0000", "metadata": {"message-id": "<sample-1042@sample-mail.example>"}, "attributes": {"uid": 311}},
+    {"_mailbox": "hello@yourdomain", "_provider": "imap", "from": "billing-questions@sample-shop.example",
+     "subject": "I was double charged this month", "textPlain": "", "textHtml": "<p>Hello,<br>my card was <b>charged twice</b> for the subscription. Please refund one.</p>",
+     "date": "Thu, 29 Oct 2026 16:40:00 +0000", "metadata": {"message-id": "<sample-dbl@sample-shop.example>"}, "attributes": {"uid": 88}},
+    {"_mailbox": "support@outlook", "_provider": "outlook", "id": "AAMkSAMPLE001", "conversationId": "AAQkSAMPLE001",
+     "subject": "Guest post opportunity + backlinks for your site",
+     "body": {"contentType": "html", "content": "<div>We offer SEO services for your website. Rank your site on first page with high DA backlinks. Unsubscribe here.</div>"},
+     "bodyPreview": "We offer SEO services...", "from": {"emailAddress": {"name": "Link Team", "address": "outreach@sample-seo.example"}},
+     "receivedDateTime": "2026-10-29T17:00:00Z"},
+    {"_mailbox": "support@outlook", "_provider": "outlook", "id": "AAMkSAMPLE002", "conversationId": "AAQkSAMPLE002",
+     "subject": "Hello", "body": {"contentType": "text", "content": "Just checking you received the documents I posted last week."},
+     "from": {"emailAddress": {"name": "", "address": "pat@bigclient.example"}}, "receivedDateTime": "2026-10-29T17:30:00Z"},
+    {"_mailbox": "sales@gmail", "_provider": "gmail", "id": "18c1a0f0sample3", "threadId": "18c1a0f0sample3",
+     "from": {"value": [{"address": "ops@sample-agency.example", "name": "Jordan Kim"}]}, "subject": "URGENT: our intake form stopped working",
+     "text": "Since this morning our lead form is broken and returns an error. We are losing leads, please help asap.", "date": "2026-10-29T18:00:00.000Z"}
+  ]
+}
